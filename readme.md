@@ -2,7 +2,7 @@
 
 This repo is some personal side work I've done as R&D for work projects.  The code here can be viewed as examples for the various problems I've needed to solve, but are basic enough and generic enough that I feel these can be used as examples for folks trying to solve similar problems.
 
-Work projects taken to mean the following:
+"Work projects" taken to mean the following:
 
 * *Descent: Underground*
 
@@ -12,7 +12,7 @@ A first attempt at getting unprivileged (non-superuser/root) ping to work on *NI
 
 ## async_ping2.cpp
 
-Second attempt at unpriviledged ping, this time using the special case where `ICMP_ECHO` works over `SOCK_DGRAM`, as opposed to `SOCK_RAW`, which is restricted to root.  Runs with two threads, the parent thread polling for completion.  While it's not exactly necessary to do multithreading in this instance, it is necessary for I implement this in my real project.  Compiles and claims to successfully send a ping packet, but does not receive a reply, at least on Max OS X.  Further testing on Linux required.
+Second attempt at unpriviledged ping, this time using the special case where `ICMP_ECHO` works over `SOCK_DGRAM`, as opposed to `SOCK_RAW`, which is restricted to root.  Runs with two threads, the parent thread polling for completion.  While it's not exactly necessary to do multithreading in this instance, it is necessary for I implement this in my real project.  Compiles and claims to successfully send a ping packet, but does not receive a reply, at least on Mac OS X.  Further testing on Linux required.
 
 ## test_ping.cpp
 
