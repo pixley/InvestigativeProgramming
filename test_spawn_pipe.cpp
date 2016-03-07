@@ -33,7 +33,6 @@ int main()
   posix_spawn_file_actions_addclose(&action, cerr_pipe[1]);
 
   string command = "/usr/bin/which ping";
-  // string command = "pgmcrater -width 64 -height 9 |pgmtopbm |pnmtoplainpnm";
   string argsmem[] = {"bash","-l","-c"}; // allows non-const access to literals
   char * args[] = {&argsmem[0][0],&argsmem[1][0],&argsmem[2][0],&command[0],nullptr};
   //char * args[] = {&command[0],nullptr};
@@ -63,7 +62,7 @@ int main()
   }
   */
 
-  struct timeval timeout = {5, 0};
+  struct timespec timeout = {5, 0};
 
   fd_set read_set;
   memset(&read_set, 0, sizeof(read_set));
@@ -72,7 +71,7 @@ int main()
 
   int larger_fd = (cout_pipe[0] > cerr_pipe[0]) ? cout_pipe[0] : cerr_pipe[0];
 
-  int rc = select(larger_fd + 1, &read_set, NULL, NULL, &timeout);
+  int rc = pselect(larger_fd + 1, &read_set, NULL, NULL, &timeout, NULL);
   //thread blocks until either packet is received or the timeout goes through
   if (rc == 0)
   {

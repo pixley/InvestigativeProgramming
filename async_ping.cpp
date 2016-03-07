@@ -41,8 +41,9 @@ std::string which_ping()
 	posix_spawn_file_actions_addclose(&action, cout_pipe[1]);
 	posix_spawn_file_actions_addclose(&action, cerr_pipe[1]);
 
-	std::string argsmem[] = {"/usr/bin/which", "ping"};
-	char* args[] = {&argsmem[0][0], &argsmem[1][0], nullptr};
+	std::string command = "/usr/bin/which ping";
+	std::string argsmem[] = {"bash","-l","-c"}; // allows non-const access to literals
+	char * args[] = {&argsmem[0][0],&argsmem[1][0],&argsmem[2][0],&command[0],nullptr};
 
 	pid_t pid;
 	if(posix_spawnp(&pid, args[0], &action, NULL, &args[0], NULL) != 0)
@@ -51,26 +52,15 @@ std::string which_ping()
     	exit(-2);
     }
 
-    if (waitpid(pid,&exit_code,WNOHANG) == -1)
-    {
-    	std::cout << "Child process was invalid." << std::endl;
-    	return "";
-    }
-
     // close child-side of pipes
     close(cout_pipe[1]);
     close(cerr_pipe[1]);
 
-    std::cout << "Started 'which' process, PID is " << pid << std::endl; 
-
-    // Wait for execution to finish
-    struct timespec sleep_time;
-    sleep_time.tv_nsec = 16000000;
-	nanosleep(&sleep_time, NULL);
+    //std::cout << "Started 'which' process, PID is " << pid << std::endl;
 
     std::string buf(64,' ');
 
-    struct timeval timeout = {5, 0};
+    struct timespec timeout = {5, 0};
 
     fd_set read_set;
     memset(&read_set, 0, sizeof(read_set));
@@ -79,7 +69,7 @@ std::string which_ping()
 
     int larger_fd = (cout_pipe[0] > cerr_pipe[0]) ? cout_pipe[0] : cerr_pipe[0];
 
-    int rc = select(larger_fd + 1, &read_set, NULL, NULL, &timeout);
+    int rc = pselect(larger_fd + 1, &read_set, NULL, NULL, &timeout, NULL);
     //thread blocks until either packet is received or the timeout goes through
     if (rc == 0)
     {
@@ -97,7 +87,7 @@ std::string which_ping()
     bytes_read = read(cout_pipe[0], &buf[0], buf.length());
 	if (bytes_read > 0)
 	{
-		std::cout << "Read in " << bytes_read << " bytes from cout_pipe." << std::endl;
+		//std::cout << "Read in " << bytes_read << " bytes from cout_pipe." << std::endl;
 	}
 	else
 	{
@@ -105,10 +95,10 @@ std::string which_ping()
 	}
 
 	waitpid(pid,&exit_code,0);
-	
+
 	posix_spawn_file_actions_destroy(&action);
 
-    return buf.substr(0,bytes_read);
+    return buf.substr(0,bytes_read - 1); //trim off the trailing newline
 }
 
 void* read_pipe(void* info)
@@ -134,7 +124,7 @@ void* read_pipe(void* info)
 		exit(-7);
 	}
 
-	std::cout << "Ping path: " << ping_path << std::endl;
+	//std::cout << "Ping path: " << ping_path << std::endl;
 
 	posix_spawn_file_actions_init(&action);
 	posix_spawn_file_actions_addclose(&action, cout_pipe[0]);
@@ -145,8 +135,12 @@ void* read_pipe(void* info)
 	posix_spawn_file_actions_addclose(&action, cout_pipe[1]);
 	posix_spawn_file_actions_addclose(&action, cerr_pipe[1]);
 
-	std::string argsmem[] = {ping_path, "-c", "1", "8.8.4.4"};
-	char* args[] = {&argsmem[0][0], &argsmem[1][0], &argsmem[2][0], &argsmem[3][0], nullptr};
+	std::string ping_addr = "8.8.4.4";
+	std::string command = ping_path + " -c 1 " + ping_addr;
+	std::string argsmem[] = {"bash","-l","-c"}; // allows non-const access to literals
+	char * args[] = {&argsmem[0][0],&argsmem[1][0],&argsmem[2][0],&command[0],nullptr};
+
+	//std::cout << "Ping command: " << command << std::endl;
 
 	pid_t pid;
 	if(posix_spawnp(&pid, args[0], &action, NULL, &args[0], NULL) != 0)
@@ -167,38 +161,43 @@ void* read_pipe(void* info)
 	std::string buf(512,' ');
 	std::stringstream bufstream;
 
-	std::vector<pollfd> plist = { {cout_pipe[0],POLLIN}, {cerr_pipe[0],POLLIN} };
-	for ( int rval; (rval=poll(&plist[0],plist.size(),5000))>0; ) {
-    	if ( plist[0].revents&POLLIN) {
-    		size_t bytes_read = read(cout_pipe[0], &buf[0], buf.length());
-    		if (bytes_read > 0)
-    		{
-    			//std::cout << "Read in " << bytes_read << " bytes from cout_pipe." << std::endl;
-    			bufstream << buf.substr(0,bytes_read);
-    		}
-    	}
-    	else if ( plist[1].revents&POLLIN ) {
-    		size_t bytes_read = read(cerr_pipe[0], &buf[0], buf.length());
-    		if (bytes_read > 0)
-    		{
-    			//std::cout << "Read in " << bytes_read << " bytes from cerr_pipe." << std::endl;
-    			std::cout << buf.substr(0,bytes_read);
-    			bufstream << buf.substr(0,bytes_read);
-    		}
-    	}
-    	else
-    	{
-			break; // nothing left to read
-		}
-    	if (waitpid(pid,&exit_code,WNOHANG) == 0)
-    	{
-    		break;
-    	}
+	struct timespec timeout = {5, 0};
+
+    fd_set read_set;
+    memset(&read_set, 0, sizeof(read_set));
+    FD_SET(cout_pipe[0], &read_set);
+    FD_SET(cerr_pipe[0], &read_set);
+
+    int larger_fd = (cout_pipe[0] > cerr_pipe[0]) ? cout_pipe[0] : cerr_pipe[0];
+
+    int rc = pselect(larger_fd + 1, &read_set, NULL, NULL, &timeout, NULL);
+    //thread blocks until either packet is received or the timeout goes through
+    if (rc == 0)
+    {
+        std::cout << "Timed out." << std::endl;
+    }
+
+	int bytes_read = read(cerr_pipe[0], &buf[0], buf.length());
+	if (bytes_read > 0)
+	{
+		std::cout << "Got error message: " << buf.substr(0, bytes_read) << std::endl;
+	}
+
+    bytes_read = read(cout_pipe[0], &buf[0], buf.length());
+	if (bytes_read > 0)
+	{
+		//std::cout << "Read in " << bytes_read << " bytes from cout_pipe." << std::endl;
+	}
+	else
+	{
+		std::cout << "Read nothing from cout_pipe." << std::endl;
 	}
 
 	//std::cout << "Done reading." << std::endl;
 
-	parent_buf = bufstream.str();
+	parent_buf = buf.substr(0,bytes_read);
+
+	waitpid(pid,&exit_code,0);
 
 	posix_spawn_file_actions_destroy(&action);
     complete = true;
@@ -237,12 +236,18 @@ int main()
     //std::cout << "Printing results from ping process!" << std::endl << std::endl;
 
     size_t time_pos = buf.rfind("time=");
-    size_t result_pos = buf.find("---");
+    if (time_pos != std::string::npos)
+    {
+	    size_t result_pos = buf.find(" ms\n", time_pos);
 
-    std::string time_result = buf.substr(time_pos + 5, (result_pos - 5) - (time_pos + 5));
+	    std::string time_result = buf.substr(time_pos + 5, (result_pos - 1) - (time_pos + 5));
 
-    std::cout << time_result << std::endl;
-
+	    std::cout << time_result << std::endl;
+	}
+	else
+	{
+		std::cout << "No response." << std::endl;
+	}
 
     /*
     for (unsigned int i = 0; i < buf.size(); i++)
