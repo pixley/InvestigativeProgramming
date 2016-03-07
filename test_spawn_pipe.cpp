@@ -32,7 +32,7 @@ int main()
   posix_spawn_file_actions_addclose(&action, cout_pipe[1]);
   posix_spawn_file_actions_addclose(&action, cerr_pipe[1]);
 
-  string command = "/usr/bin/which ping";
+  string command = "/bin/ping -c 1 8.8.4.4";
   string argsmem[] = {"bash","-l","-c"}; // allows non-const access to literals
   char * args[] = {&argsmem[0][0],&argsmem[1][0],&argsmem[2][0],&command[0],nullptr};
   //char * args[] = {&command[0],nullptr};

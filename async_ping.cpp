@@ -124,7 +124,7 @@ void* read_pipe(void* info)
 		exit(-7);
 	}
 
-	//std::cout << "Ping path: " << ping_path << std::endl;
+	std::cout << "Ping path: " << ping_path << std::endl;
 
 	posix_spawn_file_actions_init(&action);
 	posix_spawn_file_actions_addclose(&action, cout_pipe[0]);
@@ -137,6 +137,7 @@ void* read_pipe(void* info)
 
 	std::string ping_addr = "8.8.4.4";
 	std::string command = ping_path + " -c 1 " + ping_addr;
+	//std::string command = "/bin/ping -c 1 8.8.4.4";
 	std::string argsmem[] = {"bash","-l","-c"}; // allows non-const access to literals
 	char * args[] = {&argsmem[0][0],&argsmem[1][0],&argsmem[2][0],&command[0],nullptr};
 
@@ -149,11 +150,9 @@ void* read_pipe(void* info)
     	exit(-2);
     }
 
-    //std::cout << "Ping process ID: " << pid << std::endl;
+    std::cout << "Ping process ID: " << pid << std::endl;
 
-    // close child-side of pipes
-    close(cout_pipe[1]);
-    close(cerr_pipe[1]);
+    close(cout_pipe[1]), close(cerr_pipe[1]); // close child-side of pipes
 
 	bool& complete = t_info->complete;
 	std::string& parent_buf = t_info->buf;
@@ -186,23 +185,29 @@ void* read_pipe(void* info)
     bytes_read = read(cout_pipe[0], &buf[0], buf.length());
 	if (bytes_read > 0)
 	{
-		//std::cout << "Read in " << bytes_read << " bytes from cout_pipe." << std::endl;
+		std::cout << "Read in " << bytes_read << " bytes from cout_pipe." << std::endl;
 	}
 	else
 	{
 		std::cout << "Read nothing from cout_pipe." << std::endl;
 	}
 
-	//std::cout << "Done reading." << std::endl;
+	std::cout << "Done reading." << std::endl;
 
 	parent_buf = buf.substr(0,bytes_read);
 
+	std::cout << "Waiting for process to close." << std::endl;
 	waitpid(pid,&exit_code,0);
+	std::cout << "Child closed." << std::endl;
 
 	posix_spawn_file_actions_destroy(&action);
     complete = true;
 
-    return NULL;
+	std::cout << "Ping completed.  Main thread should now be taking over." << std::endl;
+
+    pthread_exit(NULL);
+
+    std::cout << "We should never get here." << std::endl;
 }
 
 int main()
@@ -224,16 +229,14 @@ int main()
 
     pthread_attr_destroy(&attributes);
 
-    struct timespec sleep_time;
-    sleep_time.tv_nsec = 16000000;
+	std::cout << "Joining child thread" << std::endl;
 
-    while (!complete)
-    {
-    	//std::cout << "Sleeping for 16 ms..." << std::endl;
-    	nanosleep(&sleep_time, NULL);
-    }
+    if (pthread_join(thread_id, NULL) != 0)
+	{
+		std::cout << "Thread join error!" << std::endl;
+	}
 
-    //std::cout << "Printing results from ping process!" << std::endl << std::endl;
+    std::cout << "Printing results from ping process!" << std::endl << std::endl;
 
     size_t time_pos = buf.rfind("time=");
     if (time_pos != std::string::npos)
@@ -256,8 +259,6 @@ int main()
     }
     std::cout << std::endl;
     */
-
-    pthread_join(thread_id, NULL);
 
     return 0;
 }
